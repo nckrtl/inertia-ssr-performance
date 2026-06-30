@@ -36,26 +36,22 @@ Vite-plus should print `Inertia SSR dev endpoint: /__inertia_ssr`.
 php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8
 ```
 
-The command emits JSON by default and always compares both PR-relevant
-behaviors:
-
-- `without_fix`: current unpatched `Http::post($url, $page)` behavior, which
-  uses Guzzle's default HTTP/1.1 transport for HTTPS SSR requests.
-- `with_fix`: proposed patch behavior with
-  `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`, which allows TLS ALPN to
-  negotiate HTTP/2 when the Vite SSR server supports it.
+The command emits JSON by default and benchmarks the behavior of the installed
+`vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php` file.
 
 The performance issue this repo demonstrates is Linux-specific in the observed
-environment. On Beast/Linux, `without_fix` consistently shows HTTP/1.1 with the
-obvious ~40ms delay while `with_fix` uses HTTP/2 and stays near ~3-4ms. On this
+environment. On Beast/Linux, the unpatched gateway consistently shows
+`"http_gateway_fix_detected": false`, HTTP/1.1, and the obvious ~40ms delay. Once
+the `HttpGateway.php` fix is applied, rerunning the same benchmark should show
+`"http_gateway_fix_detected": true`, HTTP/2, and timings near ~3-4ms. On this
 macOS machine, the same protocol selection is visible, but the HTTP/1.1 path can
 show little or no degradation. Use macOS runs only to verify protocol selection;
 use Beast/Linux runs as the PR performance evidence.
 
 The JSON output includes readable `http_protocol` / `http_protocols` fields.
 Individual samples also include `curl_http_version_label` and
-`curl_http_version_enum` for debugging. The summaries intentionally omit those
-cURL enum fields to keep the comparison compact. Do not read the enum as the
+`curl_http_version_enum` for debugging. The summary intentionally omits those
+cURL enum fields to keep the output compact. Do not read the enum as the
 HTTP protocol number: `CURL_HTTP_VERSION_1_1` is enum value `2`, while
 `CURL_HTTP_VERSION_2_0` is enum value `3`.
 

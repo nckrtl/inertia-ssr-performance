@@ -13,25 +13,40 @@ final class BenchmarkInertiaSsr extends Command
 {
     protected $signature = 'inertia:ssr-benchmark
         {url? : Full Vite SSR URL. Defaults to the current public/hot URL when Vite is running.}
-        {--runs=8 : Number of measured POST requests per mode after warmups.}
-        {--warmups=0 : Number of warmup POST requests per mode to exclude from samples.}
+        {--runs=8 : Number of measured POST requests after warmups.}
+        {--warmups=0 : Number of warmup POST requests to exclude from samples.}
         {--verify-tls : Verify TLS certificates. Local self-signed certs are skipped by default.}';
 
-    protected $description = 'Compare unpatched and patched Inertia Vite SSR HTTP version behavior.';
+    protected $description = 'Benchmark the installed Inertia HttpGateway SSR HTTP version behavior.';
 
     /**
      * @return array<string, mixed>
      */
-    public function guzzleOptionsForMode(string $mode): array
+    public function guzzleOptionsForInstalledGateway(): array
     {
-        return match ($mode) {
-            'with_fix', 'negotiate' => [
-                'curl' => [
-                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE,
-                ],
+        $gatewayFile = base_path('vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php');
+
+        if (! is_file($gatewayFile)) {
+            return [];
+        }
+
+        return $this->guzzleOptionsForGatewaySource((string) file_get_contents($gatewayFile));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function guzzleOptionsForGatewaySource(string $source): array
+    {
+        if (! str_contains($source, 'CURLOPT_HTTP_VERSION') || ! str_contains($source, 'CURL_HTTP_VERSION_NONE')) {
+            return [];
+        }
+
+        return [
+            'curl' => [
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE,
             ],
-            default => [],
-        };
+        ];
     }
 
     public function handle(): int
@@ -39,28 +54,25 @@ final class BenchmarkInertiaSsr extends Command
         $runs = max(1, (int) $this->option('runs'));
         $warmups = max(0, (int) $this->option('warmups'));
         $url = $this->resolveUrl();
-        $modes = $this->comparisonModes();
+        $guzzleOptions = $this->guzzleOptionsForInstalledGateway();
         $results = [];
         $hasError = false;
 
         for ($warmup = 1; $warmup <= $warmups; $warmup++) {
-            foreach ($modes as $measurementMode) {
-                $this->measure($url, $measurementMode, $warmup);
-            }
+            $this->measure($url, $guzzleOptions, $warmup);
         }
 
         for ($run = 1; $run <= $runs; $run++) {
-            foreach ($modes as $measurementMode) {
-                $result = $this->measure($url, $measurementMode, $run);
-                $hasError = $hasError || isset($result['error']);
-                $results[] = $result;
-            }
+            $result = $this->measure($url, $guzzleOptions, $run);
+            $hasError = $hasError || isset($result['error']);
+            $results[] = $result;
         }
 
         $payload = [
             'url' => $url,
-            'runs_per_mode' => $runs,
-            'warmups_per_mode' => $warmups,
+            'runs' => $runs,
+            'warmups' => $warmups,
+            'http_gateway_fix_detected' => $guzzleOptions !== [],
             'tls_verification' => (bool) $this->option('verify-tls'),
             'samples' => $results,
             'summary' => $this->summarize($results),
@@ -87,14 +99,15 @@ final class BenchmarkInertiaSsr extends Command
     }
 
     /**
+     * @param  array<string, mixed>  $guzzleOptions
      * @return array<string, mixed>
      */
-    private function measure(string $url, string $mode, int $run): array
+    private function measure(string $url, array $guzzleOptions, int $run): array
     {
         $startedAt = hrtime(true);
 
         try {
-            $request = Http::withOptions($this->guzzleOptionsForMode($mode));
+            $request = Http::withOptions($guzzleOptions);
 
             if (! $this->option('verify-tls')) {
                 $request = $request->withoutVerifying();
@@ -103,10 +116,9 @@ final class BenchmarkInertiaSsr extends Command
             $response = $request->post($url, $this->pagePayload());
             $wallMilliseconds = (hrtime(true) - $startedAt) / 1_000_000;
 
-            return $this->resultFromResponse($mode, $run, $response, $wallMilliseconds);
+            return $this->resultFromResponse($run, $response, $wallMilliseconds);
         } catch (Throwable $exception) {
             return [
-                'mode' => $mode,
                 'run' => $run,
                 'error' => $exception->getMessage(),
                 'wall_ms' => $this->milliseconds((hrtime(true) - $startedAt) / 1_000_000),
@@ -117,13 +129,12 @@ final class BenchmarkInertiaSsr extends Command
     /**
      * @return array<string, mixed>
      */
-    private function resultFromResponse(string $mode, int $run, Response $response, float $wallMilliseconds): array
+    private function resultFromResponse(int $run, Response $response, float $wallMilliseconds): array
     {
         $stats = $response->handlerStats();
         $curlHttpVersion = $stats['http_version'] ?? null;
 
         return [
-            'mode' => $mode,
             'run' => $run,
             'status' => $response->status(),
             'successful' => $response->successful(),
@@ -159,43 +170,32 @@ final class BenchmarkInertiaSsr extends Command
 
     /**
      * @param  array<int, array<string, mixed>>  $results
-     * @return array<string, array<string, mixed>>
+     * @return array<string, mixed>
      */
     private function summarize(array $results): array
     {
-        $summary = [];
+        $samples = array_values(array_filter(
+            $results,
+            fn (array $result) => isset($result['wall_ms']),
+        ));
 
-        foreach ($this->comparisonModes() as $mode) {
-            $samples = array_values(array_filter(
-                $results,
-                fn (array $result) => $result['mode'] === $mode && isset($result['wall_ms']),
-            ));
-
-            if ($samples === []) {
-                continue;
-            }
-
-            $wallTimes = array_column($samples, 'wall_ms');
-
-            $summary[$mode] = [
-                'runs' => count($samples),
-                'average_wall_ms' => $this->milliseconds(array_sum($wallTimes) / count($wallTimes)),
-                'median_wall_ms' => $this->median($wallTimes),
-                'min_wall_ms' => $this->milliseconds((float) min($wallTimes)),
-                'max_wall_ms' => $this->milliseconds((float) max($wallTimes)),
-                'http_protocols' => array_values(array_unique(array_filter(array_column($samples, 'http_protocol')))),
+        if ($samples === []) {
+            return [
+                'runs' => 0,
+                'http_protocols' => [],
             ];
         }
 
-        return $summary;
-    }
+        $wallTimes = array_column($samples, 'wall_ms');
 
-    /**
-     * @return array<int, string>
-     */
-    private function comparisonModes(): array
-    {
-        return ['without_fix', 'with_fix'];
+        return [
+            'runs' => count($samples),
+            'average_wall_ms' => $this->milliseconds(array_sum($wallTimes) / count($wallTimes)),
+            'median_wall_ms' => $this->median($wallTimes),
+            'min_wall_ms' => $this->milliseconds((float) min($wallTimes)),
+            'max_wall_ms' => $this->milliseconds((float) max($wallTimes)),
+            'http_protocols' => array_values(array_unique(array_filter(array_column($samples, 'http_protocol')))),
+        ];
     }
 
     private function secondsToMilliseconds(mixed $seconds): ?float
