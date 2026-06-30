@@ -42,11 +42,12 @@ negotiated result:
 - `http11`: forced HTTP/1.1 with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1`.
 - `negotiate`: proposed patch behavior with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`.
 
-The large regression was observed with this Vite-plus stack on Beast/Linux. A
-macOS loopback run can still show little or no degradation even though the
-runtime versions match. For PR evidence, prefer a Beast/Linux run when the
-result needs to show the obvious ~40ms HTTP/1.1 path versus the ~3ms negotiated
-HTTP/2 path.
+The performance issue this repo demonstrates is Linux-specific in the observed
+environment. On Beast/Linux, the forced HTTP/1.1 path consistently shows the
+obvious ~40ms delay while the negotiated path uses HTTP/2 and stays near ~3-4ms.
+On this macOS machine, the same protocol selection is visible, but the HTTP/1.1
+path can show little or no degradation. Use macOS runs only to verify protocol
+selection; use Beast/Linux runs as the PR performance evidence.
 
 The JSON output includes readable `http_protocol` / `http_protocols` fields,
 cURL constant names as `curl_http_version_label` /
