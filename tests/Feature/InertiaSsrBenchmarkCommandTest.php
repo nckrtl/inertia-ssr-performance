@@ -5,24 +5,16 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 
 describe('inertia:ssr-benchmark', function () {
-    it('uses Guzzle defaults for an unpatched gateway source', function () {
+    it('detects an unpatched Vite plugin source', function () {
         $command = new BenchmarkInertiaSsr;
 
-        expect($command->guzzleOptionsForGatewaySource('$response = Http::post($url, $page);', 'https://127.0.0.1:5174/__inertia_ssr'))->toBe([]);
+        expect($command->vitePluginSourceHasSetNoDelay('server.middlewares.use(SSR_ENDPOINT, async (req, res, next) => {'))->toBeFalse();
     });
 
-    it('uses the Guzzle HTTP/2 option for HTTPS URLs when the installed gateway source has the fix', function () {
+    it('detects the Vite setNoDelay fix in the plugin source', function () {
         $command = new BenchmarkInertiaSsr;
 
-        expect($command->guzzleOptionsForGatewaySource("'version' => '2.0'", 'https://127.0.0.1:5174/__inertia_ssr'))->toBe([
-            'version' => '2.0',
-        ]);
-    });
-
-    it('uses Guzzle defaults for HTTP URLs even when the installed gateway source has the fix', function () {
-        $command = new BenchmarkInertiaSsr;
-
-        expect($command->guzzleOptionsForGatewaySource("'version' => '2.0'", 'http://127.0.0.1:5173/__inertia_ssr'))->toBe([]);
+        expect($command->vitePluginSourceHasSetNoDelay('server.httpServer?.on("connection", (socket) => socket.setNoDelay(true));'))->toBeTrue();
     });
 
     it('maps curl HTTP version enums to protocol names', function () {
@@ -74,7 +66,8 @@ describe('inertia:ssr-benchmark', function () {
         expect($status)->toBe(0)
             ->and($payload['runs'])->toBe(2)
             ->and($payload['warmups'])->toBe(0)
-            ->and($payload)->toHaveKey('http_gateway_fix_detected')
+            ->and($payload)->toHaveKey('vite_set_no_delay_detected')
+            ->and($payload)->not->toHaveKey('http_gateway_fix_detected')
             ->and($payload['samples'][0])->toHaveKeys(['run', 'status', 'wall_ms', 'total_ms', 'starttransfer_ms', 'http_protocol'])
             ->and($payload['samples'][0])->not->toHaveKeys(['mode', 'successful', 'curl_http_version_label', 'curl_http_version_enum'])
             ->and($payload['summary'])->toHaveKeys(['runs', 'average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'guzzle_http_protocol'])

@@ -1,8 +1,8 @@
-# Inertia SSR Performance Repro
+# Inertia Vite SSR Performance Repro
 
 This repository is `nckrtl/inertia-ssr-performance`: a Laravel React/Inertia
-starter app for measuring HTTPS Vite SSR request behavior in
-`inertiajs/inertia-laravel`.
+starter app for measuring HTTPS Vite dev SSR request behavior in
+`@inertiajs/vite`.
 
 The frontend runtime intentionally matches Hauser on Beast by using
 `vite-plus@0.2.1` with `vite` aliased to
@@ -38,55 +38,51 @@ Vite-plus should print `Inertia SSR dev endpoint: /__inertia_ssr`.
 php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8
 ```
 
-The command emits JSON by default and benchmarks the behavior of the installed
-`vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php` file.
+The command emits JSON by default and benchmarks the running Vite SSR endpoint.
+It keeps Laravel/Guzzle on its default HTTP/1.1 path so the result shows whether
+the Vite server-side fix is applied.
 
-On Beast/Linux, the unpatched gateway consistently shows
-`"http_gateway_fix_detected": false`, HTTP/1.1, and the obvious ~40ms delay.
-Once the `HttpGateway.php` fix is applied, rerunning the same benchmark should
-show `"http_gateway_fix_detected": true`, HTTP/2, and timings near ~3-4ms.
+On Beast/Linux, the unpatched Vite endpoint consistently shows
+`"vite_set_no_delay_detected": false`, HTTP/1.1, and the obvious ~40ms delay.
+Once the `@inertiajs/vite` fix is applied and Vite is restarted, rerunning the
+same benchmark should show `"vite_set_no_delay_detected": true`, still HTTP/1.1,
+and timings near ~3-4ms.
 
 On macOS, the unpatched request also stays on HTTP/1.1, but it does not show the
 same consistent wait. Use Beast/Linux runs as the PR performance evidence.
 
-Plain HTTP control:
+Production SSR was checked separately on Beast/Linux. The standalone Inertia SSR
+server at `http://127.0.0.1:13714/render` stayed fast on HTTP/1.1, so this issue
+is specific to the HTTPS Vite dev SSR endpoint.
 
-```bash
-npm run dev:http
-php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8
-```
-
-Plain HTTP should stay fast on HTTP/1.1. The fix is only for HTTPS SSR URLs,
-where Vite's HTTPS dev server can use HTTP/2.
+Each sample includes `http_protocol`. The summary repeats the observed protocol
+as `guzzle_http_protocol` so the benchmark result stays compact.
 
 ## Patch Target
 
-For this repro, keep the installed vendor file unpatched while collecting the
+For this repro, keep the installed Vite plugin unpatched while collecting the
 baseline:
 
 ```text
-vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php
+node_modules/@inertiajs/vite/dist/index.js
 ```
 
-Baseline:
+The PR behavior under test is adding `socket.setNoDelay(true)` to the Vite dev
+server when the Inertia SSR endpoint is registered:
 
-```php
-$response = Http::post($url, $page);
+```js
+configureServer(server) {
+  devServer = server;
+  server.httpServer?.on('connection', (socket) => socket.setNoDelay(true));
+
+  if (!entry) {
+    return;
+  }
+}
 ```
 
-Fix:
-
-```php
-$options = Str::startsWith($url, 'https://')
-    ? ['version' => '2.0']
-    : [];
-
-$response = Http::withOptions($options)->post($url, $page);
-```
-
-This uses Guzzle's supported `version` option. The raw curl option that means
-"let curl figure it out" is not used here because Guzzle deprecates that
-conflicting option and rejects it in Guzzle 8.
+This keeps the Laravel/Guzzle request on HTTP/1.1, but removes the Linux wait in
+the HTTPS Vite dev SSR path.
 
 ## Verify
 

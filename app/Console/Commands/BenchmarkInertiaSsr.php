@@ -17,53 +17,27 @@ final class BenchmarkInertiaSsr extends Command
         {--warmups=0 : Number of warmup POST requests to exclude from samples.}
         {--verify-tls : Verify TLS certificates. Local self-signed certs are skipped by default.}';
 
-    protected $description = 'Benchmark the installed Inertia HttpGateway SSR HTTP version behavior.';
+    protected $description = 'Benchmark the Inertia Vite dev SSR endpoint behavior.';
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function guzzleOptionsForInstalledGateway(string $url): array
+    public function installedVitePluginHasSetNoDelay(): bool
     {
-        return $this->guzzleOptionsForGatewaySource($this->installedGatewaySource(), $url);
+        return $this->vitePluginSourceHasSetNoDelay($this->installedVitePluginSource());
     }
 
-    public function installedGatewayHasFix(): bool
+    private function installedVitePluginSource(): string
     {
-        return $this->gatewaySourceHasFix($this->installedGatewaySource());
-    }
+        $pluginFile = base_path('node_modules/@inertiajs/vite/dist/index.js');
 
-    private function installedGatewaySource(): string
-    {
-        $gatewayFile = base_path('vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php');
-
-        if (! is_file($gatewayFile)) {
+        if (! is_file($pluginFile)) {
             return '';
         }
 
-        return (string) file_get_contents($gatewayFile);
+        return (string) file_get_contents($pluginFile);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function guzzleOptionsForGatewaySource(string $source, string $url): array
+    public function vitePluginSourceHasSetNoDelay(string $source): bool
     {
-        if (! str_starts_with($url, 'https://')) {
-            return [];
-        }
-
-        if (! $this->gatewaySourceHasFix($source)) {
-            return [];
-        }
-
-        return [
-            'version' => '2.0',
-        ];
-    }
-
-    public function gatewaySourceHasFix(string $source): bool
-    {
-        return str_contains($source, "'version' => '2.0'");
+        return str_contains($source, 'setNoDelay(true)');
     }
 
     public function handle(): int
@@ -71,17 +45,16 @@ final class BenchmarkInertiaSsr extends Command
         $runs = max(1, (int) $this->option('runs'));
         $warmups = max(0, (int) $this->option('warmups'));
         $url = $this->resolveUrl();
-        $guzzleOptions = $this->guzzleOptionsForInstalledGateway($url);
-        $gatewayFixDetected = $this->installedGatewayHasFix();
+        $viteSetNoDelayDetected = $this->installedVitePluginHasSetNoDelay();
         $results = [];
         $hasError = false;
 
         for ($warmup = 1; $warmup <= $warmups; $warmup++) {
-            $this->measure($url, $guzzleOptions, $warmup);
+            $this->measure($url, $warmup);
         }
 
         for ($run = 1; $run <= $runs; $run++) {
-            $result = $this->measure($url, $guzzleOptions, $run);
+            $result = $this->measure($url, $run);
             $hasError = $hasError || isset($result['error']);
             $results[] = $result;
         }
@@ -90,7 +63,7 @@ final class BenchmarkInertiaSsr extends Command
             'url' => $url,
             'runs' => $runs,
             'warmups' => $warmups,
-            'http_gateway_fix_detected' => $gatewayFixDetected,
+            'vite_set_no_delay_detected' => $viteSetNoDelayDetected,
             'tls_verification' => (bool) $this->option('verify-tls'),
             'samples' => $results,
             'summary' => $this->summarize($results),
@@ -117,15 +90,14 @@ final class BenchmarkInertiaSsr extends Command
     }
 
     /**
-     * @param  array<string, mixed>  $guzzleOptions
      * @return array<string, mixed>
      */
-    private function measure(string $url, array $guzzleOptions, int $run): array
+    private function measure(string $url, int $run): array
     {
         $startedAt = hrtime(true);
 
         try {
-            $request = Http::withOptions($guzzleOptions);
+            $request = Http::withOptions([]);
 
             if (! $this->option('verify-tls')) {
                 $request = $request->withoutVerifying();
