@@ -2,20 +2,23 @@
 
 describe('project HTTPS configuration', function () {
     it('documents the HTTPS app URL as the demo entrypoint', function () {
-        $agents = file_get_contents(base_path('AGENTS.md'));
+        foreach (['AGENTS.md', 'README.md'] as $file) {
+            $contents = file_get_contents(base_path($file));
 
-        expect($agents)
-            ->toContain('npm run dev:app')
-            ->toContain('https://127.0.0.1:8000')
-            ->toContain('php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8')
-            ->toContain('http_gateway_fix_detected')
-            ->toContain('benchmarks the behavior of the installed')
-            ->toContain('http_protocol')
-            ->toContain('guzzle_http_protocol')
-            ->not->toContain('curl_http_version_label')
-            ->not->toContain('curl_http_version_enum')
-            ->not->toContain('--mode=compare')
-            ->not->toContain('php artisan serve --host=127.0.0.1 --port=8000');
+            expect($contents)
+                ->toContain('npm run dev:app')
+                ->toContain('https://127.0.0.1:8000')
+                ->toContain('php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8')
+                ->toContain('http_gateway_fix_detected')
+                ->toContain('benchmarks the behavior of the installed')
+                ->toContain("'version' => '2.0'")
+                ->not->toContain('CURLOPT_HTTP_VERSION')
+                ->not->toContain('CURL_HTTP_VERSION_NONE')
+                ->not->toContain('curl_http_version_label')
+                ->not->toContain('curl_http_version_enum')
+                ->not->toContain('--mode=compare')
+                ->not->toContain('php artisan serve --host=127.0.0.1 --port=8000');
+        }
     });
 
     it('provides an npm script for the HTTPS demo app', function () {

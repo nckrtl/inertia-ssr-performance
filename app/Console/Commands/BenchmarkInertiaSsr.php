@@ -57,15 +57,13 @@ final class BenchmarkInertiaSsr extends Command
         }
 
         return [
-            'curl' => [
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE,
-            ],
+            'version' => '2.0',
         ];
     }
 
     public function gatewaySourceHasFix(string $source): bool
     {
-        return str_contains($source, 'CURLOPT_HTTP_VERSION') && str_contains($source, 'CURL_HTTP_VERSION_NONE');
+        return str_contains($source, "'version' => '2.0'");
     }
 
     public function handle(): int

@@ -2,8 +2,10 @@
 
 This repository is `nckrtl/inertia-ssr-performance`: a Laravel React/Inertia
 starter app for measuring HTTPS Vite SSR request behavior in
-`inertiajs/inertia-laravel`. The frontend runtime intentionally matches
-Hauser on Beast by using `vite-plus@0.2.1` with `vite` aliased to
+`inertiajs/inertia-laravel`.
+
+The frontend runtime intentionally matches Hauser on Beast by using
+`vite-plus@0.2.1` with `vite` aliased to
 `@voidzero-dev/vite-plus-core@0.2.1`.
 
 Use npm only. The local HTTPS certificate and key are already committed in
@@ -30,7 +32,7 @@ Accept the browser warning for the committed self-signed local certificate.
 local HTTPS proxy on port 8000, and starts Vite-plus HTTPS on port 5174.
 Vite-plus should print `Inertia SSR dev endpoint: /__inertia_ssr`.
 
-## Compare HTTP Version Behavior
+## Benchmark
 
 ```bash
 php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8
@@ -39,18 +41,15 @@ php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8
 The command emits JSON by default and benchmarks the behavior of the installed
 `vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php` file.
 
-The performance issue this repo demonstrates is Linux-specific in the observed
-environment. On Beast/Linux, the unpatched gateway consistently shows
-`"http_gateway_fix_detected": false`, HTTP/1.1, and the obvious ~40ms delay. Once
-the `HttpGateway.php` fix is applied, rerunning the same benchmark should show
-`"http_gateway_fix_detected": true`, HTTP/2, and timings near ~3-4ms. On macOS,
-the unpatched request also stays on HTTP/1.1, but it does not show the same
-consistent wait. Use Beast/Linux runs as the PR performance evidence.
+On Beast/Linux, the unpatched gateway consistently shows
+`"http_gateway_fix_detected": false`, HTTP/1.1, and the obvious ~40ms delay.
+Once the `HttpGateway.php` fix is applied, rerunning the same benchmark should
+show `"http_gateway_fix_detected": true`, HTTP/2, and timings near ~3-4ms.
 
-Each sample includes `http_protocol`. The summary repeats the observed protocol
-as `guzzle_http_protocol` so the benchmark result stays compact.
+On macOS, the unpatched request also stays on HTTP/1.1, but it does not show the
+same consistent wait. Use Beast/Linux runs as the PR performance evidence.
 
-Plain HTTP Vite control:
+Plain HTTP control:
 
 ```bash
 npm run dev:http
@@ -62,26 +61,20 @@ where Vite's HTTPS dev server can use HTTP/2.
 
 ## Patch Target
 
-The relevant package file is:
+For this repro, keep the installed vendor file unpatched while collecting the
+baseline:
 
 ```text
 vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php
 ```
 
-For this repro, keep that installed vendor file unpatched while collecting the
-baseline. It should still contain:
+Baseline:
 
 ```php
 $response = Http::post($url, $page);
 ```
 
-The PR behavior under test is changing the SSR POST from:
-
-```php
-$response = Http::post($url, $page);
-```
-
-to:
+Fix:
 
 ```php
 $options = Str::startsWith($url, 'https://')

@@ -11,20 +11,18 @@ describe('inertia:ssr-benchmark', function () {
         expect($command->guzzleOptionsForGatewaySource('$response = Http::post($url, $page);', 'https://127.0.0.1:5174/__inertia_ssr'))->toBe([]);
     });
 
-    it('uses curl HTTP negotiation for HTTPS URLs when the installed gateway source has the fix', function () {
+    it('uses the Guzzle HTTP/2 option for HTTPS URLs when the installed gateway source has the fix', function () {
         $command = new BenchmarkInertiaSsr;
 
-        expect($command->guzzleOptionsForGatewaySource('CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE', 'https://127.0.0.1:5174/__inertia_ssr'))->toBe([
-            'curl' => [
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE,
-            ],
+        expect($command->guzzleOptionsForGatewaySource("'version' => '2.0'", 'https://127.0.0.1:5174/__inertia_ssr'))->toBe([
+            'version' => '2.0',
         ]);
     });
 
     it('uses Guzzle defaults for HTTP URLs even when the installed gateway source has the fix', function () {
         $command = new BenchmarkInertiaSsr;
 
-        expect($command->guzzleOptionsForGatewaySource('CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE', 'http://127.0.0.1:5173/__inertia_ssr'))->toBe([]);
+        expect($command->guzzleOptionsForGatewaySource("'version' => '2.0'", 'http://127.0.0.1:5173/__inertia_ssr'))->toBe([]);
     });
 
     it('maps curl HTTP version enums to protocol names', function () {
