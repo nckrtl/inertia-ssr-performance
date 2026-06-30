@@ -46,6 +46,29 @@ describe('inertia:ssr-benchmark', function () {
             && $request['url'] === '/');
     });
 
+    it('passes the requested SSR response size to the page payload', function () {
+        $url = 'https://127.0.0.1:5174/__inertia_ssr';
+
+        Http::fake([
+            $url => Http::response(str_repeat('x', 64 * 1024)),
+        ]);
+
+        $status = Artisan::call('inertia:ssr-benchmark', [
+            'url' => $url,
+            '--runs' => 1,
+            '--response-kb' => 64,
+        ]);
+
+        $payload = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($status)->toBe(0)
+            ->and($payload['response_kb'])->toBe(64)
+            ->and($payload['samples'][0]['response_bytes'])->toBe(64 * 1024)
+            ->and($payload['summary']['response_bytes'])->toBe(64 * 1024);
+
+        Http::assertSent(fn ($request) => $request['props']['ssrResponseKilobytes'] === 64);
+    });
+
     it('returns JSON by default with a single summary', function () {
         $url = 'https://127.0.0.1:5174/__inertia_ssr';
 
@@ -66,11 +89,12 @@ describe('inertia:ssr-benchmark', function () {
         expect($status)->toBe(0)
             ->and($payload['runs'])->toBe(2)
             ->and($payload['warmups'])->toBe(0)
+            ->and($payload['response_kb'])->toBe(0)
             ->and($payload)->toHaveKey('vite_set_no_delay_detected')
             ->and($payload)->not->toHaveKey('http_gateway_fix_detected')
-            ->and($payload['samples'][0])->toHaveKeys(['run', 'status', 'wall_ms', 'total_ms', 'starttransfer_ms', 'http_protocol'])
+            ->and($payload['samples'][0])->toHaveKeys(['run', 'status', 'wall_ms', 'total_ms', 'starttransfer_ms', 'response_bytes', 'http_protocol'])
             ->and($payload['samples'][0])->not->toHaveKeys(['mode', 'successful', 'curl_http_version_label', 'curl_http_version_enum'])
-            ->and($payload['summary'])->toHaveKeys(['runs', 'average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'guzzle_http_protocol'])
+            ->and($payload['summary'])->toHaveKeys(['runs', 'average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'response_bytes', 'guzzle_http_protocol'])
             ->and($payload['summary'])->not->toHaveKeys(['without_fix', 'with_fix', 'http_protocols']);
 
         Http::assertSentCount(2);

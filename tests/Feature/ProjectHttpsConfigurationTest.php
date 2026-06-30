@@ -9,6 +9,8 @@ describe('project HTTPS configuration', function () {
                 ->toContain('npm run dev:app')
                 ->toContain('https://127.0.0.1:8000')
                 ->toContain('php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8')
+                ->toContain('--response-kb=64')
+                ->toContain('response_bytes')
                 ->toContain('vite_set_no_delay_detected')
                 ->toContain('benchmarks the running Vite SSR endpoint')
                 ->toContain('socket.setNoDelay(true)')
@@ -50,14 +52,14 @@ describe('project HTTPS configuration', function () {
             ->toBe('vp build && vp build --ssr');
     });
 
-    it('documents that the demo uses Vite-plus to match Hauser on Beast', function () {
+    it('documents the Vite-plus runtime shape', function () {
         $agents = file_get_contents(base_path('AGENTS.md'));
 
         expect($agents)
             ->toContain('vite-plus@0.2.1')
             ->toContain('@voidzero-dev/vite-plus-core@0.2.1')
-            ->toContain('Hauser on Beast')
-            ->toContain('Beast/Linux');
+            ->not->toContain('Hauser on Beast')
+            ->not->toContain('Beast/Linux');
     });
 
     it('configures the Vite-plus dev server origin and HMR host from the app URL', function () {

@@ -15,6 +15,7 @@ final class BenchmarkInertiaSsr extends Command
         {url? : Full Vite SSR URL. Defaults to the current public/hot URL when Vite is running.}
         {--runs=8 : Number of measured POST requests after warmups.}
         {--warmups=0 : Number of warmup POST requests to exclude from samples.}
+        {--response-kb=0 : Extra rendered SSR response size in KiB.}
         {--verify-tls : Verify TLS certificates. Local self-signed certs are skipped by default.}';
 
     protected $description = 'Benchmark the Inertia Vite dev SSR endpoint behavior.';
@@ -44,17 +45,18 @@ final class BenchmarkInertiaSsr extends Command
     {
         $runs = max(1, (int) $this->option('runs'));
         $warmups = max(0, (int) $this->option('warmups'));
+        $responseKilobytes = max(0, (int) $this->option('response-kb'));
         $url = $this->resolveUrl();
         $viteSetNoDelayDetected = $this->installedVitePluginHasSetNoDelay();
         $results = [];
         $hasError = false;
 
         for ($warmup = 1; $warmup <= $warmups; $warmup++) {
-            $this->measure($url, $warmup);
+            $this->measure($url, $warmup, $responseKilobytes);
         }
 
         for ($run = 1; $run <= $runs; $run++) {
-            $result = $this->measure($url, $run);
+            $result = $this->measure($url, $run, $responseKilobytes);
             $hasError = $hasError || isset($result['error']);
             $results[] = $result;
         }
@@ -63,6 +65,7 @@ final class BenchmarkInertiaSsr extends Command
             'url' => $url,
             'runs' => $runs,
             'warmups' => $warmups,
+            'response_kb' => $responseKilobytes,
             'vite_set_no_delay_detected' => $viteSetNoDelayDetected,
             'tls_verification' => (bool) $this->option('verify-tls'),
             'samples' => $results,
@@ -92,7 +95,7 @@ final class BenchmarkInertiaSsr extends Command
     /**
      * @return array<string, mixed>
      */
-    private function measure(string $url, int $run): array
+    private function measure(string $url, int $run, int $responseKilobytes): array
     {
         $startedAt = hrtime(true);
 
@@ -103,7 +106,7 @@ final class BenchmarkInertiaSsr extends Command
                 $request = $request->withoutVerifying();
             }
 
-            $response = $request->post($url, $this->pagePayload());
+            $response = $request->post($url, $this->pagePayload($responseKilobytes));
             $wallMilliseconds = (hrtime(true) - $startedAt) / 1_000_000;
 
             return $this->resultFromResponse($run, $response, $wallMilliseconds);
@@ -130,6 +133,7 @@ final class BenchmarkInertiaSsr extends Command
             'wall_ms' => $this->milliseconds($wallMilliseconds),
             'total_ms' => $this->secondsToMilliseconds($stats['total_time'] ?? null),
             'starttransfer_ms' => $this->secondsToMilliseconds($stats['starttransfer_time'] ?? null),
+            'response_bytes' => strlen($response->body()),
             'http_protocol' => $this->httpProtocol($curlHttpVersion),
         ];
     }
@@ -137,7 +141,7 @@ final class BenchmarkInertiaSsr extends Command
     /**
      * @return array<string, mixed>
      */
-    private function pagePayload(): array
+    private function pagePayload(int $responseKilobytes): array
     {
         return [
             'component' => 'welcome',
@@ -146,6 +150,7 @@ final class BenchmarkInertiaSsr extends Command
                 'auth' => ['user' => null],
                 'benchmarkName' => 'Inertia SSR performance probe',
                 'ssrEndpoint' => '/__inertia_ssr',
+                'ssrResponseKilobytes' => $responseKilobytes,
                 'name' => config('app.name', 'Laravel'),
                 'sidebarOpen' => true,
             ],
@@ -175,6 +180,10 @@ final class BenchmarkInertiaSsr extends Command
 
         $wallTimes = array_column($samples, 'wall_ms');
         $protocols = array_values(array_unique(array_filter(array_column($samples, 'http_protocol'))));
+        $responseBytes = array_values(array_filter(
+            array_column($samples, 'response_bytes'),
+            fn (mixed $bytes): bool => is_numeric($bytes),
+        ));
 
         return [
             'runs' => count($samples),
@@ -182,6 +191,7 @@ final class BenchmarkInertiaSsr extends Command
             'median_wall_ms' => $this->median($wallTimes),
             'min_wall_ms' => $this->milliseconds((float) min($wallTimes)),
             'max_wall_ms' => $this->milliseconds((float) max($wallTimes)),
+            'response_bytes' => $responseBytes[0] ?? null,
             'guzzle_http_protocol' => $protocols[0] ?? null,
         ];
     }

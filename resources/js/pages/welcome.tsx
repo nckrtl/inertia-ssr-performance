@@ -3,9 +3,16 @@ import { Head } from '@inertiajs/react';
 type WelcomeProps = {
     benchmarkName: string;
     ssrEndpoint: string;
+    ssrResponseKilobytes?: number;
 };
 
-export default function Welcome({ benchmarkName, ssrEndpoint }: WelcomeProps) {
+export default function Welcome({
+    benchmarkName,
+    ssrEndpoint,
+    ssrResponseKilobytes = 0,
+}: WelcomeProps) {
+    const responseProbe = 'x'.repeat(Math.max(0, ssrResponseKilobytes) * 1024);
+
     return (
         <>
             <Head title="SSR performance probe" />
@@ -14,15 +21,15 @@ export default function Welcome({ benchmarkName, ssrEndpoint }: WelcomeProps) {
                 <section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-4xl flex-col justify-center gap-10">
                     <div className="space-y-4">
                         <p className="text-sm font-medium tracking-[0.18em] text-red-600 uppercase">
-                            Inertia Laravel HTTPS SSR
+                            Inertia Vite HTTPS SSR
                         </p>
                         <h1 className="max-w-3xl text-4xl leading-tight font-semibold sm:text-6xl">
                             {benchmarkName}
                         </h1>
                         <p className="max-w-2xl text-lg leading-8 text-zinc-600">
-                            A minimal Laravel React starter for comparing the
-                            default Guzzle request path with curl HTTP version
-                            negotiation against Vite's development SSR endpoint.
+                            A minimal Laravel React starter for measuring Vite's
+                            development SSR endpoint with different rendered
+                            response sizes.
                         </p>
                     </div>
 
@@ -48,10 +55,20 @@ export default function Welcome({ benchmarkName, ssrEndpoint }: WelcomeProps) {
                                 Package
                             </dt>
                             <dd className="mt-2 text-base font-semibold">
-                                inertiajs/inertia-laravel
+                                @inertiajs/vite
                             </dd>
                         </div>
                     </dl>
+
+                    {responseProbe.length > 0 && (
+                        <pre
+                            aria-hidden="true"
+                            className="hidden"
+                            data-ssr-response-size-probe
+                        >
+                            {responseProbe}
+                        </pre>
+                    )}
                 </section>
             </main>
         </>
