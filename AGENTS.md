@@ -31,22 +31,33 @@ print `Inertia SSR dev endpoint: /__inertia_ssr`.
 ## Compare HTTP Version Behavior
 
 ```bash
-php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8 --mode=both --json
+php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8 --warmups=2 --mode=compare --json
 ```
 
-The command compares:
+The default comparison intentionally shows one HTTP/1.1 result and one
+negotiated result:
 
-- `default`: Laravel HTTP client / Guzzle defaults.
-- `negotiate`: `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`.
+- `http11`: forced HTTP/1.1 with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1`.
+- `negotiate`: proposed patch behavior with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`.
 
-PHP curl handler stats use `http_version: 2` for HTTP/1.1 and
-`http_version: 3` for HTTP/2.
+The JSON output includes readable `http_protocol` / `http_protocols` fields,
+cURL constant names as `curl_http_version_label` /
+`curl_http_version_labels`, and the raw cURL enum as
+`curl_http_version_enum` / `curl_http_version_enums`. Do not read the enum as
+the HTTP protocol number: `CURL_HTTP_VERSION_1_1` is enum value `2`, while
+`CURL_HTTP_VERSION_2_0` is enum value `3`.
+
+Use `--mode=default` when you want to inspect the current unpatched package
+baseline. It usually reports the same `http_protocol: "HTTP/1.1"` and
+`curl_http_version_label: "CURL_HTTP_VERSION_1_1"` as `http11`, which is why
+the normal comparison keeps it out of the summary. Use `--mode=all` only when
+you intentionally want `default`, `http11`, and `negotiate` together.
 
 Plain HTTP Vite control:
 
 ```bash
 npm run dev:http
-php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8 --mode=both --json
+php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8 --warmups=2 --mode=compare --json
 ```
 
 ## Patch Target
@@ -55,6 +66,13 @@ The relevant package file is:
 
 ```text
 vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php
+```
+
+For this repro, keep that installed vendor file unpatched while collecting the
+baseline. It should still contain:
+
+```php
+$response = Http::post($url, $page);
 ```
 
 The PR behavior under test is changing the SSR POST from:

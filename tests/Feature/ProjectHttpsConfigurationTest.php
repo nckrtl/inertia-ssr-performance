@@ -7,6 +7,13 @@ describe('project HTTPS configuration', function () {
         expect($agents)
             ->toContain('npm run dev:app')
             ->toContain('https://127.0.0.1:8000')
+            ->toContain('--mode=compare')
+            ->toContain('--warmups=2')
+            ->toContain('http11')
+            ->toContain('CURL_HTTP_VERSION_1_1')
+            ->toContain('http_protocol')
+            ->toContain('curl_http_version_label')
+            ->toContain('curl_http_version_enum')
             ->not->toContain('php artisan serve --host=127.0.0.1 --port=8000');
     });
 
