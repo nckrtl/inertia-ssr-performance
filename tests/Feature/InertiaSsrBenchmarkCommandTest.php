@@ -81,10 +81,35 @@ describe('inertia:ssr-benchmark', function () {
             ->and(array_keys($payload['summary']))->toBe(['http11', 'negotiate'])
             ->and($payload['warmups_per_mode'])->toBe(0)
             ->and($payload['samples'][0])->toHaveKeys(['http_protocol', 'curl_http_version_label', 'curl_http_version_enum'])
-            ->and($payload['summary']['http11'])->toHaveKeys(['average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'http_protocols', 'curl_http_version_labels', 'curl_http_version_enums'])
-            ->and($payload['summary']['negotiate'])->toHaveKeys(['average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'http_protocols', 'curl_http_version_labels', 'curl_http_version_enums']);
+            ->and($payload['summary']['http11'])->toHaveKeys(['average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'http_protocols'])
+            ->and($payload['summary']['negotiate'])->toHaveKeys(['average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'http_protocols']);
 
         Http::assertSentCount(4);
+    });
+
+    it('keeps curl enum metadata out of mode summaries', function () {
+        $url = 'https://127.0.0.1:5174/__inertia_ssr';
+
+        Http::fake([
+            $url => Http::response([
+                'head' => ['<title>SSR probe</title>'],
+                'body' => '<div>SSR probe</div>',
+            ]),
+        ]);
+
+        $status = Artisan::call('inertia:ssr-benchmark', [
+            'url' => $url,
+            '--runs' => 2,
+            '--mode' => 'both',
+            '--json' => true,
+        ]);
+
+        $payload = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($status)->toBe(0)
+            ->and($payload['samples'][0])->toHaveKeys(['curl_http_version_label', 'curl_http_version_enum'])
+            ->and($payload['summary']['http11'])->not->toHaveKeys(['curl_http_version_labels', 'curl_http_version_enums'])
+            ->and($payload['summary']['negotiate'])->not->toHaveKeys(['curl_http_version_labels', 'curl_http_version_enums']);
     });
 
     it('excludes warmup requests from measured samples', function () {

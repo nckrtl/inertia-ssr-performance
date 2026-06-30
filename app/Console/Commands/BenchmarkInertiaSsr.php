@@ -222,8 +222,6 @@ final class BenchmarkInertiaSsr extends Command
                 'min_wall_ms' => $this->milliseconds((float) min($wallTimes)),
                 'max_wall_ms' => $this->milliseconds((float) max($wallTimes)),
                 'http_protocols' => array_values(array_unique(array_filter(array_column($samples, 'http_protocol')))),
-                'curl_http_version_labels' => array_values(array_unique(array_filter(array_column($samples, 'curl_http_version_label')))),
-                'curl_http_version_enums' => array_values(array_unique(array_filter(array_column($samples, 'curl_http_version_enum')))),
             ];
         }
 

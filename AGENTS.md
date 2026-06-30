@@ -49,11 +49,11 @@ On this macOS machine, the same protocol selection is visible, but the HTTP/1.1
 path can show little or no degradation. Use macOS runs only to verify protocol
 selection; use Beast/Linux runs as the PR performance evidence.
 
-The JSON output includes readable `http_protocol` / `http_protocols` fields,
-cURL constant names as `curl_http_version_label` /
-`curl_http_version_labels`, and the raw cURL enum as
-`curl_http_version_enum` / `curl_http_version_enums`. Do not read the enum as
-the HTTP protocol number: `CURL_HTTP_VERSION_1_1` is enum value `2`, while
+The JSON output includes readable `http_protocol` / `http_protocols` fields.
+Individual samples also include `curl_http_version_label` and
+`curl_http_version_enum` for debugging. The summaries intentionally omit those
+cURL enum fields to keep the comparison compact. Do not read the enum as the
+HTTP protocol number: `CURL_HTTP_VERSION_1_1` is enum value `2`, while
 `CURL_HTTP_VERSION_2_0` is enum value `3`.
 
 Use `--mode=default` when you want to inspect the current unpatched package
