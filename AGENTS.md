@@ -58,6 +58,9 @@ npm run dev:http
 php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8
 ```
 
+Plain HTTP should stay fast on HTTP/1.1; the fix is only for HTTPS SSR URLs
+where TLS protocol negotiation is available.
+
 ## Patch Target
 
 The relevant package file is:

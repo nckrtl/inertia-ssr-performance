@@ -22,23 +22,37 @@ final class BenchmarkInertiaSsr extends Command
     /**
      * @return array<string, mixed>
      */
-    public function guzzleOptionsForInstalledGateway(): array
+    public function guzzleOptionsForInstalledGateway(string $url): array
+    {
+        return $this->guzzleOptionsForGatewaySource($this->installedGatewaySource(), $url);
+    }
+
+    public function installedGatewayHasFix(): bool
+    {
+        return $this->gatewaySourceHasFix($this->installedGatewaySource());
+    }
+
+    private function installedGatewaySource(): string
     {
         $gatewayFile = base_path('vendor/inertiajs/inertia-laravel/src/Ssr/HttpGateway.php');
 
         if (! is_file($gatewayFile)) {
-            return [];
+            return '';
         }
 
-        return $this->guzzleOptionsForGatewaySource((string) file_get_contents($gatewayFile));
+        return (string) file_get_contents($gatewayFile);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function guzzleOptionsForGatewaySource(string $source): array
+    public function guzzleOptionsForGatewaySource(string $source, string $url): array
     {
-        if (! str_contains($source, 'CURLOPT_HTTP_VERSION') || ! str_contains($source, 'CURL_HTTP_VERSION_NONE')) {
+        if (! str_starts_with($url, 'https://')) {
+            return [];
+        }
+
+        if (! $this->gatewaySourceHasFix($source)) {
             return [];
         }
 
@@ -49,12 +63,18 @@ final class BenchmarkInertiaSsr extends Command
         ];
     }
 
+    public function gatewaySourceHasFix(string $source): bool
+    {
+        return str_contains($source, 'CURLOPT_HTTP_VERSION') && str_contains($source, 'CURL_HTTP_VERSION_NONE');
+    }
+
     public function handle(): int
     {
         $runs = max(1, (int) $this->option('runs'));
         $warmups = max(0, (int) $this->option('warmups'));
         $url = $this->resolveUrl();
-        $guzzleOptions = $this->guzzleOptionsForInstalledGateway();
+        $guzzleOptions = $this->guzzleOptionsForInstalledGateway($url);
+        $gatewayFixDetected = $this->installedGatewayHasFix();
         $results = [];
         $hasError = false;
 
@@ -72,7 +92,7 @@ final class BenchmarkInertiaSsr extends Command
             'url' => $url,
             'runs' => $runs,
             'warmups' => $warmups,
-            'http_gateway_fix_detected' => $guzzleOptions !== [],
+            'http_gateway_fix_detected' => $gatewayFixDetected,
             'tls_verification' => (bool) $this->option('verify-tls'),
             'samples' => $results,
             'summary' => $this->summarize($results),
