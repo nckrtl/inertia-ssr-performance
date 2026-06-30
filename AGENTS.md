@@ -1,8 +1,10 @@
 # Inertia SSR Performance Repro
 
-This repository is `nckrtl/inertia-ssr-performance`: a standard Laravel
-React/Inertia starter app for measuring HTTPS Vite SSR request behavior in
-`inertiajs/inertia-laravel`.
+This repository is `nckrtl/inertia-ssr-performance`: a Laravel React/Inertia
+starter app for measuring HTTPS Vite SSR request behavior in
+`inertiajs/inertia-laravel`. The frontend runtime intentionally matches
+Hauser on Beast by using `vite-plus@0.2.1` with `vite` aliased to
+`@voidzero-dev/vite-plus-core@0.2.1`.
 
 Use npm only. The local HTTPS certificate and key are already committed in
 `certs/` for this demo repo.
@@ -25,8 +27,8 @@ https://127.0.0.1:8000
 Accept the browser warning for the committed self-signed local certificate.
 
 `npm run dev:app` starts Laravel on an internal HTTP port, exposes it through a
-local HTTPS proxy on port 8000, and starts Vite HTTPS on port 5174. Vite should
-print `Inertia SSR dev endpoint: /__inertia_ssr`.
+local HTTPS proxy on port 8000, and starts Vite-plus HTTPS on port 5174.
+Vite-plus should print `Inertia SSR dev endpoint: /__inertia_ssr`.
 
 ## Compare HTTP Version Behavior
 
@@ -39,6 +41,12 @@ negotiated result:
 
 - `http11`: forced HTTP/1.1 with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1`.
 - `negotiate`: proposed patch behavior with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`.
+
+The large regression was observed with this Vite-plus stack on Beast/Linux. A
+macOS loopback run can still show little or no degradation even though the
+runtime versions match. For PR evidence, prefer a Beast/Linux run when the
+result needs to show the obvious ~40ms HTTP/1.1 path versus the ~3ms negotiated
+HTTP/2 path.
 
 The JSON output includes readable `http_protocol` / `http_protocols` fields,
 cURL constant names as `curl_http_version_label` /
