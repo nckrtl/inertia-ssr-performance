@@ -137,13 +137,10 @@ final class BenchmarkInertiaSsr extends Command
         return [
             'run' => $run,
             'status' => $response->status(),
-            'successful' => $response->successful(),
             'wall_ms' => $this->milliseconds($wallMilliseconds),
             'total_ms' => $this->secondsToMilliseconds($stats['total_time'] ?? null),
             'starttransfer_ms' => $this->secondsToMilliseconds($stats['starttransfer_time'] ?? null),
             'http_protocol' => $this->httpProtocol($curlHttpVersion),
-            'curl_http_version_label' => $this->curlHttpVersionLabel($curlHttpVersion),
-            'curl_http_version_enum' => $curlHttpVersion,
         ];
     }
 
@@ -182,11 +179,12 @@ final class BenchmarkInertiaSsr extends Command
         if ($samples === []) {
             return [
                 'runs' => 0,
-                'http_protocols' => [],
+                'guzzle_http_protocol' => null,
             ];
         }
 
         $wallTimes = array_column($samples, 'wall_ms');
+        $protocols = array_values(array_unique(array_filter(array_column($samples, 'http_protocol'))));
 
         return [
             'runs' => count($samples),
@@ -194,7 +192,7 @@ final class BenchmarkInertiaSsr extends Command
             'median_wall_ms' => $this->median($wallTimes),
             'min_wall_ms' => $this->milliseconds((float) min($wallTimes)),
             'max_wall_ms' => $this->milliseconds((float) max($wallTimes)),
-            'http_protocols' => array_values(array_unique(array_filter(array_column($samples, 'http_protocol')))),
+            'guzzle_http_protocol' => $protocols[0] ?? null,
         ];
     }
 
@@ -214,42 +212,29 @@ final class BenchmarkInertiaSsr extends Command
 
     public function httpProtocol(mixed $curlHttpVersion): ?string
     {
-        return $this->curlHttpVersionMetadata($curlHttpVersion)['protocol'];
-    }
-
-    public function curlHttpVersionLabel(mixed $curlHttpVersion): ?string
-    {
-        return $this->curlHttpVersionMetadata($curlHttpVersion)['label'];
-    }
-
-    /**
-     * @return array{protocol: ?string, label: ?string}
-     */
-    private function curlHttpVersionMetadata(mixed $curlHttpVersion): array
-    {
         $version = $this->normalizeCurlHttpVersion($curlHttpVersion);
 
         if ($version === null) {
-            return ['protocol' => null, 'label' => null];
+            return null;
         }
 
         $versions = [
-            CURL_HTTP_VERSION_1_0 => ['protocol' => 'HTTP/1.0', 'label' => 'CURL_HTTP_VERSION_1_0'],
-            CURL_HTTP_VERSION_1_1 => ['protocol' => 'HTTP/1.1', 'label' => 'CURL_HTTP_VERSION_1_1'],
-            CURL_HTTP_VERSION_2_0 => ['protocol' => 'HTTP/2', 'label' => 'CURL_HTTP_VERSION_2_0'],
+            CURL_HTTP_VERSION_1_0 => 'HTTP/1.0',
+            CURL_HTTP_VERSION_1_1 => 'HTTP/1.1',
+            CURL_HTTP_VERSION_2_0 => 'HTTP/2',
         ];
 
         $http3Version = defined('CURL_HTTP_VERSION_3') ? constant('CURL_HTTP_VERSION_3') : null;
 
         if (is_int($http3Version)) {
-            $versions[$http3Version] = ['protocol' => 'HTTP/3', 'label' => 'CURL_HTTP_VERSION_3'];
+            $versions[$http3Version] = 'HTTP/3';
         }
 
         if (isset($versions[$version])) {
             return $versions[$version];
         }
 
-        return ['protocol' => "curl enum {$version}", 'label' => "curl enum {$version}"];
+        return "curl enum {$version}";
     }
 
     private function normalizeCurlHttpVersion(mixed $curlHttpVersion): ?int

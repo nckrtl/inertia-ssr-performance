@@ -21,13 +21,11 @@ describe('inertia:ssr-benchmark', function () {
         ]);
     });
 
-    it('names curl HTTP version enums without confusing them for protocol numbers', function () {
+    it('maps curl HTTP version enums to protocol names', function () {
         $command = new BenchmarkInertiaSsr;
 
         expect($command->httpProtocol(CURL_HTTP_VERSION_1_1))->toBe('HTTP/1.1')
-            ->and($command->curlHttpVersionLabel(CURL_HTTP_VERSION_1_1))->toBe('CURL_HTTP_VERSION_1_1')
-            ->and($command->httpProtocol(CURL_HTTP_VERSION_2_0))->toBe('HTTP/2')
-            ->and($command->curlHttpVersionLabel(CURL_HTTP_VERSION_2_0))->toBe('CURL_HTTP_VERSION_2_0');
+            ->and($command->httpProtocol(CURL_HTTP_VERSION_2_0))->toBe('HTTP/2');
     });
 
     it('posts the SSR payload once per measured run', function () {
@@ -73,15 +71,15 @@ describe('inertia:ssr-benchmark', function () {
             ->and($payload['runs'])->toBe(2)
             ->and($payload['warmups'])->toBe(0)
             ->and($payload)->toHaveKey('http_gateway_fix_detected')
-            ->and($payload['samples'][0])->toHaveKeys(['http_protocol', 'curl_http_version_label', 'curl_http_version_enum'])
-            ->and($payload['samples'][0])->not->toHaveKey('mode')
-            ->and($payload['summary'])->toHaveKeys(['runs', 'average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'http_protocols'])
-            ->and($payload['summary'])->not->toHaveKeys(['without_fix', 'with_fix']);
+            ->and($payload['samples'][0])->toHaveKeys(['run', 'status', 'wall_ms', 'total_ms', 'starttransfer_ms', 'http_protocol'])
+            ->and($payload['samples'][0])->not->toHaveKeys(['mode', 'successful', 'curl_http_version_label', 'curl_http_version_enum'])
+            ->and($payload['summary'])->toHaveKeys(['runs', 'average_wall_ms', 'median_wall_ms', 'min_wall_ms', 'max_wall_ms', 'guzzle_http_protocol'])
+            ->and($payload['summary'])->not->toHaveKeys(['without_fix', 'with_fix', 'http_protocols']);
 
         Http::assertSentCount(2);
     });
 
-    it('keeps curl enum metadata out of the summary', function () {
+    it('keeps curl enum metadata out of the JSON output', function () {
         $url = 'https://127.0.0.1:5174/__inertia_ssr';
 
         Http::fake([
@@ -99,7 +97,7 @@ describe('inertia:ssr-benchmark', function () {
         $payload = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
 
         expect($status)->toBe(0)
-            ->and($payload['samples'][0])->toHaveKeys(['curl_http_version_label', 'curl_http_version_enum'])
+            ->and($payload['samples'][0])->not->toHaveKeys(['curl_http_version_label', 'curl_http_version_enum'])
             ->and($payload['summary'])->not->toHaveKeys(['curl_http_version_labels', 'curl_http_version_enums']);
     });
 

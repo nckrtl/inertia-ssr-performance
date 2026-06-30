@@ -10,10 +10,10 @@ describe('project HTTPS configuration', function () {
             ->toContain('php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8')
             ->toContain('http_gateway_fix_detected')
             ->toContain('benchmarks the behavior of the installed')
-            ->toContain('CURL_HTTP_VERSION_1_1')
             ->toContain('http_protocol')
-            ->toContain('curl_http_version_label')
-            ->toContain('curl_http_version_enum')
+            ->toContain('guzzle_http_protocol')
+            ->not->toContain('curl_http_version_label')
+            ->not->toContain('curl_http_version_enum')
             ->not->toContain('--mode=compare')
             ->not->toContain('php artisan serve --host=127.0.0.1 --port=8000');
     });
