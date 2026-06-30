@@ -33,21 +33,24 @@ Vite-plus should print `Inertia SSR dev endpoint: /__inertia_ssr`.
 ## Compare HTTP Version Behavior
 
 ```bash
-php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8 --warmups=2 --mode=compare --json
+php artisan inertia:ssr-benchmark https://127.0.0.1:5174/__inertia_ssr --runs=8
 ```
 
-The default comparison intentionally shows one HTTP/1.1 result and one
-negotiated result:
+The command emits JSON by default and always compares both PR-relevant
+behaviors:
 
-- `http11`: forced HTTP/1.1 with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1`.
-- `negotiate`: proposed patch behavior with `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`.
+- `without_fix`: current unpatched `Http::post($url, $page)` behavior, which
+  uses Guzzle's default HTTP/1.1 transport for HTTPS SSR requests.
+- `with_fix`: proposed patch behavior with
+  `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE`, which allows TLS ALPN to
+  negotiate HTTP/2 when the Vite SSR server supports it.
 
 The performance issue this repo demonstrates is Linux-specific in the observed
-environment. On Beast/Linux, the forced HTTP/1.1 path consistently shows the
-obvious ~40ms delay while the negotiated path uses HTTP/2 and stays near ~3-4ms.
-On this macOS machine, the same protocol selection is visible, but the HTTP/1.1
-path can show little or no degradation. Use macOS runs only to verify protocol
-selection; use Beast/Linux runs as the PR performance evidence.
+environment. On Beast/Linux, `without_fix` consistently shows HTTP/1.1 with the
+obvious ~40ms delay while `with_fix` uses HTTP/2 and stays near ~3-4ms. On this
+macOS machine, the same protocol selection is visible, but the HTTP/1.1 path can
+show little or no degradation. Use macOS runs only to verify protocol selection;
+use Beast/Linux runs as the PR performance evidence.
 
 The JSON output includes readable `http_protocol` / `http_protocols` fields.
 Individual samples also include `curl_http_version_label` and
@@ -56,17 +59,11 @@ cURL enum fields to keep the comparison compact. Do not read the enum as the
 HTTP protocol number: `CURL_HTTP_VERSION_1_1` is enum value `2`, while
 `CURL_HTTP_VERSION_2_0` is enum value `3`.
 
-Use `--mode=default` when you want to inspect the current unpatched package
-baseline. It usually reports the same `http_protocol: "HTTP/1.1"` and
-`curl_http_version_label: "CURL_HTTP_VERSION_1_1"` as `http11`, which is why
-the normal comparison keeps it out of the summary. Use `--mode=all` only when
-you intentionally want `default`, `http11`, and `negotiate` together.
-
 Plain HTTP Vite control:
 
 ```bash
 npm run dev:http
-php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8 --warmups=2 --mode=compare --json
+php artisan inertia:ssr-benchmark http://127.0.0.1:5173/__inertia_ssr --runs=8
 ```
 
 ## Patch Target

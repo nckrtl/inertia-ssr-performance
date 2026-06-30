@@ -15,11 +15,9 @@ final class BenchmarkInertiaSsr extends Command
         {url? : Full Vite SSR URL. Defaults to the current public/hot URL when Vite is running.}
         {--runs=8 : Number of measured POST requests per mode after warmups.}
         {--warmups=0 : Number of warmup POST requests per mode to exclude from samples.}
-        {--mode=compare : Measurement mode: compare, default, http11, negotiate, all, or both.}
-        {--verify-tls : Verify TLS certificates. Local self-signed certs are skipped by default.}
-        {--json : Emit machine-readable JSON.}';
+        {--verify-tls : Verify TLS certificates. Local self-signed certs are skipped by default.}';
 
-    protected $description = 'Compare default, forced HTTP/1.1, and negotiated HTTP version behavior for Inertia Vite SSR requests.';
+    protected $description = 'Compare unpatched and patched Inertia Vite SSR HTTP version behavior.';
 
     /**
      * @return array<string, mixed>
@@ -27,12 +25,7 @@ final class BenchmarkInertiaSsr extends Command
     public function guzzleOptionsForMode(string $mode): array
     {
         return match ($mode) {
-            'http11' => [
-                'curl' => [
-                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                ],
-            ],
-            'negotiate' => [
+            'with_fix', 'negotiate' => [
                 'curl' => [
                     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_NONE,
                 ],
@@ -43,18 +36,10 @@ final class BenchmarkInertiaSsr extends Command
 
     public function handle(): int
     {
-        $mode = (string) $this->option('mode');
-
-        if (! in_array($mode, ['compare', 'default', 'http11', 'negotiate', 'all', 'both'], true)) {
-            $this->error('The --mode option must be compare, default, http11, negotiate, all, or both.');
-
-            return self::INVALID;
-        }
-
         $runs = max(1, (int) $this->option('runs'));
         $warmups = max(0, (int) $this->option('warmups'));
         $url = $this->resolveUrl();
-        $modes = $this->modesForOption($mode);
+        $modes = $this->comparisonModes();
         $results = [];
         $hasError = false;
 
@@ -81,30 +66,7 @@ final class BenchmarkInertiaSsr extends Command
             'summary' => $this->summarize($results),
         ];
 
-        if ($this->option('json')) {
-            $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
-
-            return $hasError ? self::FAILURE : self::SUCCESS;
-        }
-
-        $this->table(
-            ['mode', 'run', 'status', 'wall_ms', 'total_ms', 'starttransfer_ms', 'http_protocol', 'curl_http_version_label', 'curl_http_version_enum'],
-            array_map(fn (array $result) => [
-                $result['mode'],
-                $result['run'],
-                $result['status'] ?? 'error',
-                $result['wall_ms'] ?? null,
-                $result['total_ms'] ?? null,
-                $result['starttransfer_ms'] ?? null,
-                $result['http_protocol'] ?? 'n/a',
-                $result['curl_http_version_label'] ?? 'n/a',
-                $result['curl_http_version_enum'] ?? 'n/a',
-            ], $results),
-        );
-
-        $this->line('');
-        $this->line("Warmups per mode: {$warmups} excluded from samples.");
-        $this->line('Raw cURL HTTP version enum values: CURL_HTTP_VERSION_1_1 = 2, CURL_HTTP_VERSION_2_0 = 3.');
+        $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
         return $hasError ? self::FAILURE : self::SUCCESS;
     }
@@ -203,7 +165,7 @@ final class BenchmarkInertiaSsr extends Command
     {
         $summary = [];
 
-        foreach ($this->allMeasurementModes() as $mode) {
+        foreach ($this->comparisonModes() as $mode) {
             $samples = array_values(array_filter(
                 $results,
                 fn (array $result) => $result['mode'] === $mode && isset($result['wall_ms']),
@@ -233,27 +195,7 @@ final class BenchmarkInertiaSsr extends Command
      */
     private function comparisonModes(): array
     {
-        return ['http11', 'negotiate'];
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function allMeasurementModes(): array
-    {
-        return ['default', 'http11', 'negotiate'];
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function modesForOption(string $mode): array
-    {
-        return match ($mode) {
-            'compare', 'both' => $this->comparisonModes(),
-            'all' => $this->allMeasurementModes(),
-            default => [$mode],
-        };
+        return ['without_fix', 'with_fix'];
     }
 
     private function secondsToMilliseconds(mixed $seconds): ?float
